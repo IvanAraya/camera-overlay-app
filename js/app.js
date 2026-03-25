@@ -1,5 +1,5 @@
 /* =============================================
-   CAMERA OVERLAY APP - MAIN JAVASCRIPT
+   CAMERA OVERLAY APP - LAYOUT VERSION
    ============================================= */
 
 class CameraOverlayApp {
@@ -9,10 +9,11 @@ class CameraOverlayApp {
         this.canvas = document.getElementById('overlayCanvas');
         this.ctx = this.canvas.getContext('2d');
         this.statusMessage = document.getElementById('statusMessage');
-        this.controlsPanel = document.getElementById('controlsPanel');
         this.gestureHint = document.getElementById('gestureHint');
         this.cameraIndicator = document.getElementById('cameraIndicator');
         this.cameraType = document.getElementById('cameraType');
+        this.settingsPanel = document.getElementById('settingsPanel');
+        this.settingsBtn = document.getElementById('settingsBtn');
         
         // Estado de la aplicación
         this.overlayImage = null;
@@ -31,6 +32,7 @@ class CameraOverlayApp {
         this.cameraZoom = 1; // Zoom de la cámara
         this.maxZoom = 10; // Zoom máximo permitido
         this.minZoom = 0.1; // Zoom mínimo permitido (10x alejado)
+        this.settingsOpen = false;
         
         // Inicialización
         this.initializeControls();
@@ -38,15 +40,18 @@ class CameraOverlayApp {
         this.enumerateDevices();
         this.initializeCamera();
         this.initializeTouchGestures();
-        this.initializePanelInteraction();
+        this.initializeSettingsPanel();
+        
+        // Mostrar hint inicialmente
+        setTimeout(() => {
+            this.gestureHint.classList.remove('d-none');
+            this.gestureHint.style.animation = 'fadeIn 0.3s ease-out';
+        }, 1000);
         
         // Ocultar hint después de 5 segundos
         setTimeout(() => {
-            this.gestureHint.style.opacity = '0';
-            setTimeout(() => {
-                this.gestureHint.style.display = 'none';
-            }, 300);
-        }, 5000);
+            this.gestureHint.classList.add('d-none');
+        }, 6000);
     }
 
     /* =============================================
@@ -60,39 +65,16 @@ class CameraOverlayApp {
         });
 
         // Opacity slider
-        const opacitySlider = document.getElementById('opacitySlider');
-        opacitySlider.addEventListener('input', (e) => {
+        document.getElementById('opacitySlider').addEventListener('input', (e) => {
             this.opacity = e.target.value / 100;
             document.getElementById('opacityValue').textContent = `${e.target.value}%`;
             this.renderOverlay();
         });
 
-        // Size slider
-        const sizeSlider = document.getElementById('sizeSlider');
-        sizeSlider.addEventListener('input', (e) => {
-            this.scale = e.target.value / 100;
-            document.getElementById('sizeValue').textContent = `${e.target.value}%`;
-            this.renderOverlay();
-        });
-
         // Rotation slider
-        const rotationSlider = document.getElementById('rotationSlider');
-        rotationSlider.addEventListener('input', (e) => {
+        document.getElementById('rotationSlider').addEventListener('input', (e) => {
             this.rotation = (e.target.value * Math.PI) / 180;
             document.getElementById('rotationValue').textContent = `${e.target.value}°`;
-            this.renderOverlay();
-        });
-
-        // Zoom buttons
-        document.getElementById('zoomInBtn').addEventListener('click', () => {
-            this.scale = Math.min(this.scale + 0.1, 2);
-            this.updateSizeSlider();
-            this.renderOverlay();
-        });
-
-        document.getElementById('zoomOutBtn').addEventListener('click', () => {
-            this.scale = Math.max(this.scale - 0.1, 0.25);
-            this.updateSizeSlider();
             this.renderOverlay();
         });
 
@@ -109,17 +91,13 @@ class CameraOverlayApp {
             this.resetCameraZoom();
         });
 
-        // Action buttons
-        document.getElementById('resetPositionBtn').addEventListener('click', () => {
+        // Settings panel buttons
+        document.getElementById('centerImageBtn').addEventListener('click', () => {
             this.resetPosition();
         });
 
         document.getElementById('clearImageBtn').addEventListener('click', () => {
             this.clearImage();
-        });
-
-        document.getElementById('retryCameraBtn').addEventListener('click', () => {
-            this.retryCamera();
         });
 
         document.getElementById('switchCameraBtn').addEventListener('click', () => {
@@ -133,36 +111,50 @@ class CameraOverlayApp {
         });
     }
 
-    updateSizeSlider() {
-        const percentage = Math.round(this.scale * 100);
-        document.getElementById('sizeSlider').value = percentage;
-        document.getElementById('sizeValue').textContent = `${percentage}%`;
-    }
+    initializeSettingsPanel() {
+        // Toggle settings panel
+        this.settingsBtn.addEventListener('click', () => {
+            this.toggleSettings();
+        });
 
-    initializePanelInteraction() {
-        const controlHandle = this.controlsPanel.querySelector('.control-handle');
-        let isExpanded = false;
-
-        const togglePanel = () => {
-            isExpanded = !isExpanded;
-            this.controlsPanel.classList.toggle('expanded', isExpanded);
-        };
-
-        controlHandle.addEventListener('click', togglePanel);
-        
-        // También expandir/colapsar al tocar en el canvas
-        let tapTimer;
-        this.canvas.addEventListener('touchstart', (e) => {
-            if (e.touches.length === 1) {
-                tapTimer = setTimeout(() => {
-                    togglePanel();
-                }, 500);
+        // Cerrar panel al hacer clic fuera
+        document.addEventListener('click', (e) => {
+            if (this.settingsOpen && 
+                !this.settingsPanel.contains(e.target) && 
+                !this.settingsBtn.contains(e.target)) {
+                this.closeSettings();
             }
         });
 
-        this.canvas.addEventListener('touchend', () => {
-            clearTimeout(tapTimer);
+        // Cerrar panel con ESC
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && this.settingsOpen) {
+                this.closeSettings();
+            }
         });
+    }
+
+    toggleSettings() {
+        this.settingsOpen = !this.settingsOpen;
+        if (this.settingsOpen) {
+            this.openSettings();
+        } else {
+            this.closeSettings();
+        }
+    }
+
+    openSettings() {
+        this.settingsPanel.classList.add('show');
+        this.settingsOpen = true;
+        this.settingsBtn.style.background = '#667eea';
+        this.settingsBtn.style.color = 'white';
+    }
+
+    closeSettings() {
+        this.settingsPanel.classList.remove('show');
+        this.settingsOpen = false;
+        this.settingsBtn.style.background = 'rgba(255, 255, 255, 0.1)';
+        this.settingsBtn.style.color = 'white';
     }
 
     /* =============================================
@@ -315,8 +307,8 @@ class CameraOverlayApp {
         } else if (error.message && error.message.includes('HTTPS')) {
             message = 'Se requiere conexión segura HTTPS';
             solutions = [
-                'Usa el servidor HTTPS: https://localhost:8443/camera-overlay.html',
-                'Accede desde https://[TU_IP]:8443/camera-overlay.html',
+                'Usa el servidor HTTPS: https://localhost:8443/index-layout.html',
+                'Accede desde https://[TU_IP]:8443/index-layout.html',
                 'Acepta la advertencia de certificado',
                 'No uses http:// o file://'
             ];
@@ -390,24 +382,10 @@ class CameraOverlayApp {
         await this.initializeCamera();
     }
 
-    async retryCamera() {
-        // Detener stream actual si existe
-        if (this.cameraStream) {
-            this.cameraStream.getTracks().forEach(track => track.stop());
-            this.cameraStream = null;
-        }
-        
-        // Limpiar mensajes de error
-        this.statusMessage.innerHTML = '';
-        
-        // Reintentar inicialización
-        await this.initializeCamera();
-    }
-
     updateCameraIndicator() {
         const isFront = this.currentCamera === 'user';
         this.cameraType.textContent = isFront ? '🤱 Frontal' : '📷 Trasera';
-        this.cameraType.style.color = isFront ? '#ff6b9d' : '#4ecdc4';
+        this.cameraType.className = `badge ${isFront ? 'bg-danger' : 'bg-primary'}`;
     }
 
     /* =============================================
@@ -477,7 +455,6 @@ class CameraOverlayApp {
 
     applyDigitalZoom() {
         // Zoom digital simulado con transform CSS
-        // Calcula el factor de escala inverso para zoom real
         const scaleFactor = this.cameraZoom;
         
         // Aplica transformación CSS para simular zoom óptico
@@ -496,39 +473,41 @@ class CameraOverlayApp {
         const solutionsHtml = solutions.map(solution => `<li>• ${solution}</li>`).join('');
         
         const errorHtml = `
-            <div class="no-camera-message">
-                <h3>📷 ${message}</h3>
-                <p><strong>Error:</strong> ${error.name || 'Desconocido'}</p>
-                <div style="background: rgba(255,255,255,0.1); padding: 0.5rem; border-radius: 5px; margin: 0.5rem 0; font-size: 0.8rem;">
+            <div class="alert alert-danger d-flex flex-column align-items-center" role="alert">
+                <h5 class="alert-heading"><i class="bi bi-camera-video-off me-2"></i> ${message}</h5>
+                <p class="mb-2"><strong>Error:</strong> ${error.name || 'Desconocido'}</p>
+                <div class="code-block mb-3">
                     <code>${technicalInfo}</code>
                 </div>
-                <div style="text-align: left; margin: 1.5rem 0;">
-                    <p><strong>✅ Soluciones:</strong></p>
-                    <ul style="list-style: none; padding: 0;">
+                <div class="solutions-list mb-3">
+                    <h6><i class="bi bi-lightbulb me-2"></i> Soluciones:</h6>
+                    <ul class="list-unstyled">
                         ${solutionsHtml}
                     </ul>
                 </div>
-                <div style="display: flex; gap: 0.5rem; justify-content: center; flex-wrap: wrap;">
-                    <button class="btn-icon btn-primary" onclick="location.reload()" style="margin: 1rem auto; display: inline-block; width: auto; padding: 0.5rem 1rem;">
-                        🔄 Recargar Página
+                <div class="d-flex gap-2 justify-content-center flex-wrap">
+                    <button class="btn btn-primary" onclick="location.reload()">
+                        <i class="bi bi-arrow-clockwise me-2"></i> Recargar Página
                     </button>
-                    <button class="btn-icon btn-secondary" onclick="navigator.mediaDevices.getUserMedia({video: true}).then(() => location.reload()).catch(e => console.log(e))" style="margin: 1rem auto; display: inline-block; width: auto; padding: 0.5rem 1rem;">
-                        🎥 Verificar Cámara
+                    <button class="btn btn-secondary" onclick="navigator.mediaDevices.getUserMedia({video: true}).then(() => location.reload()).catch(e => console.log(e))">
+                        <i class="bi bi-camera-video me-2"></i> Verificar Cámara
                     </button>
                 </div>
-                <p style="margin-top: 1rem; font-size: 0.8rem; opacity: 0.8;">
-                    💡 Puedes seguir usando la aplicación para cargar y ajustar imágenes sin cámara.
+                <p class="mt-3 mb-0 text-muted small">
+                    <i class="bi bi-info-circle me-2"></i> Puedes seguir usando la aplicación para cargar y ajustar imágenes sin cámara.
                 </p>
-                <details style="margin-top: 1rem;">
-                    <summary style="cursor: pointer; color: #66d9ef;">🔍 Información técnica</summary>
-                    <pre style="background: rgba(0,0,0,0.3); padding: 0.5rem; border-radius: 5px; font-size: 0.7rem; overflow-x: auto;">
-Navegador: ${navigator.userAgent}
+                <details class="mt-3">
+                    <summary class="btn btn-outline-secondary btn-sm">
+                        <i class="bi bi-gear me-2"></i> Información técnica
+                    </summary>
+                    <div class="code-block mt-2">
+                        <pre class="mb-0">Navegador: ${navigator.userAgent}
 Protocolo: ${location.protocol}
 Hostname: ${location.hostname}
 HTTPS: ${location.protocol === 'https:' ? '✅' : '❌'}
 getUserMedia: ${navigator.mediaDevices ? '✅' : '❌'}
-Error completo: ${JSON.stringify(error, null, 2)}
-                    </pre>
+Error completo: ${JSON.stringify(error, null, 2)}</pre>
+                    </div>
                 </details>
             </div>
         `;
@@ -558,13 +537,9 @@ Error completo: ${JSON.stringify(error, null, 2)}
                 this.showStatus('Imagen cargada correctamente', 'success');
                 
                 // Mostrar hint de gestos
-                this.gestureHint.style.display = 'block';
-                this.gestureHint.style.opacity = '1';
+                this.gestureHint.classList.remove('d-none');
                 setTimeout(() => {
-                    this.gestureHint.style.opacity = '0';
-                    setTimeout(() => {
-                        this.gestureHint.style.display = 'none';
-                    }, 300);
+                    this.gestureHint.classList.add('d-none');
                 }, 3000);
             };
             img.onerror = () => {
@@ -654,11 +629,10 @@ Error completo: ${JSON.stringify(error, null, 2)}
                 // Si hay imagen superpuesta, hacer zoom a la imagen
                 if (this.overlayImage) {
                     this.scale = Math.max(0.25, Math.min(2, this.initialPinchScale * scaleRatio));
-                    this.updateSizeSlider();
                     this.renderOverlay();
                 } else {
                     // Si no hay imagen, hacer zoom a la cámara
-                    this.cameraZoom = Math.max(1, Math.min(this.maxZoom, this.initialCameraZoom * scaleRatio));
+                    this.cameraZoom = Math.max(this.minZoom, Math.min(this.maxZoom, this.initialCameraZoom * scaleRatio));
                     this.applyCameraZoom();
                     this.showStatus(`Zoom cámara: ${Math.round(this.cameraZoom * 100)}%`, 'info');
                 }
@@ -684,7 +658,6 @@ Error completo: ${JSON.stringify(error, null, 2)}
                 // Wheel normal = zoom de imagen
                 const delta = e.deltaY > 0 ? -0.1 : 0.1;
                 this.scale = Math.max(0.25, Math.min(2, this.scale + delta));
-                this.updateSizeSlider();
                 this.renderOverlay();
             }
         });
@@ -697,7 +670,7 @@ Error completo: ${JSON.stringify(error, null, 2)}
     }
 
     /* =============================================
-       RENDERIZADO Y CANVAS
+       RENDERIZADO Y UTILIDADES
        ============================================= */
 
     resizeCanvas() {
@@ -738,7 +711,7 @@ Error completo: ${JSON.stringify(error, null, 2)}
             drawWidth = drawHeight * imgRatio;
         }
 
-        // Center the image at the position
+        // Center image at position
         this.ctx.drawImage(
             this.overlayImage,
             -drawWidth / 2,
@@ -749,10 +722,6 @@ Error completo: ${JSON.stringify(error, null, 2)}
 
         this.ctx.restore();
     }
-
-    /* =============================================
-       UTILIDADES
-       ============================================= */
 
     resetPosition() {
         this.position = { x: this.canvas.width / 2, y: this.canvas.height / 2 };
@@ -768,7 +737,15 @@ Error completo: ${JSON.stringify(error, null, 2)}
     }
 
     showStatus(message, type = 'info') {
-        this.statusMessage.innerHTML = `<div class="status-message status-${type}">${message}</div>`;
+        const alertClass = type === 'error' ? 'alert-danger' : 'alert-success';
+        const icon = type === 'error' ? 'bi-exclamation-triangle' : 'bi-check-circle';
+        
+        this.statusMessage.innerHTML = `
+            <div class="alert ${alertClass} d-flex align-items-center" style="position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 2000; min-width: 300px;" role="alert">
+                <i class="bi ${icon} me-2"></i>
+                <span>${message}</span>
+            </div>
+        `;
         
         if (type !== 'error') {
             setTimeout(() => {
@@ -784,7 +761,7 @@ Error completo: ${JSON.stringify(error, null, 2)}
    INICIALIZACIÓN DE LA APLICACIÓN
    ============================================= */
 
-// Initialize the application when DOM is loaded
+// Initialize application when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
     // Register Service Worker for PWA
     if ('serviceWorker' in navigator) {

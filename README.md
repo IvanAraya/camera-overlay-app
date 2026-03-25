@@ -42,22 +42,64 @@ Aplicación web progresiva (PWA) para superponer imágenes sobre la cámara en t
 
 ```
 camera-overlay-app/
-├── index.html              # HTML principal
+├── index.html              # HTML principal (Bootstrap + layout optimizado)
 ├── manifest.json           # Configuración PWA
 ├── sw.js                 # Service Worker
 ├── css/
-│   └── styles.css        # Estilos
+│   └── bootstrap-custom.css # Estilos Bootstrap personalizados
 ├── js/
 │   └── app.js           # Lógica principal
 ├── assets/
-│   ├── icon-72.png
+│   ├── icon-72.png      # Iconos PWA
 │   ├── icon-96.png
 │   ├── icon-128.png
 │   ├── icon-144.png
 │   ├── icon-192.png
 │   └── icon-512.png
-└── README.md              # Documentación
+├── server/                # Servidor de desarrollo
+│   ├── dev-server.py    # Servidor HTTPS Python
+│   ├── package.json      # Scripts y dependencias
+│   ├── README.md         # Documentación del servidor
+│   ├── start-dev.bat    # Inicio Windows
+│   └── start-dev.sh     # Inicio Linux/Mac
+├── .gitignore             # Archivos ignorados por Git
+└── README.md              # Documentación principal
 ```
+
+## 🎨 **Características del Layout**
+
+### **Distribución de Controles:**
+```
+ 🔎🔎🔄                              📷 Trasera
+ ┌─────────────────────────────────────────────────────┐
+│                                             │
+│                                             │
+│                                             │
+│                                             │
+│                                             │
+│                                             │
+│                                             │
+│                                             │
+│                                             │
+│                                             │
+│                                             │
+│                                             │
+├─────────────────────────────────────────────────────┤
+│ 🖼️  ─────o─────── ⚙️                         │
+└─────────────────────────────────────────────────────┘
+```
+
+### **📍 Controles Optimizados:**
+- **🔝 Superior Izquierdo**: Zoom de cámara (compacto, 35x35px)
+- **🔝 Superior Derecho**: Indicador de cámara actual (badge)
+- **🔽 Inferior Central**: Cargar imagen, opacidad slider, settings
+- **📋 Settings Desplegable**: Rotación, centrar, borrar, cambiar cámara
+
+### **🎨 Framework Bootstrap:**
+- **Bootstrap 5.3.0**: Componentes profesionales
+- **Bootstrap Icons**: Iconos consistentes
+- **CSS Personalizado**: Variables y overrides
+- **Responsive**: Breakpoints automáticos
 
 ## 🌐 **Despliegue**
 
