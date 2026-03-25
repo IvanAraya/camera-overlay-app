@@ -68,26 +68,6 @@ camera-overlay-app/
 
 ## 🎨 **Características del Layout**
 
-### **Distribución de Controles:**
-```
- 🔎🔎🔄                              📷 Trasera
- ┌─────────────────────────────────────────────────────┐
-│                                             │
-│                                             │
-│                                             │
-│                                             │
-│                                             │
-│                                             │
-│                                             │
-│                                             │
-│                                             │
-│                                             │
-│                                             │
-│                                             │
-├─────────────────────────────────────────────────────┤
-│ 🖼️  ─────o─────── ⚙️                         │
-└─────────────────────────────────────────────────────┘
-```
 
 ### **📍 Controles Optimizados:**
 - **🔝 Superior Izquierdo**: Zoom de cámara (compacto, 35x35px)

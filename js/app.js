@@ -29,9 +29,10 @@ class CameraOverlayApp {
         this.initialPinchScale = 1;
         this.currentCamera = 'environment'; // 'user' para frontal, 'environment' para trasera
         this.availableCameras = [];
+        this.currentCameraIndex = 0; // Índice de la cámara activa dentro de availableCameras
         this.cameraZoom = 1; // Zoom de la cámara
         this.maxZoom = 10; // Zoom máximo permitido
-        this.minZoom = 0.1; // Zoom mínimo permitido (10x alejado)
+        this.minZoom = 0.1; // Por debajo de 1x se aplica zoom out digital (reducción del cuadro)
         this.settingsOpen = false;
         
         // Throttling para renderizado
@@ -42,8 +43,10 @@ class CameraOverlayApp {
         // Inicialización
         this.initializeControls();
         this.checkCameraSupport();
-        this.enumerateDevices();
-        this.initializeCamera();
+        // enumerateDevices debe completarse antes de initializeCamera para usar deviceId
+        this.enumerateDevices().then(() => {
+            this.initializeCamera();
+        });
         this.initializeTouchGestures();
         this.initializeSettingsPanel();
         
@@ -90,11 +93,11 @@ class CameraOverlayApp {
 
         // Camera zoom buttons
         document.getElementById('cameraZoomInBtn').addEventListener('click', () => {
-            this.zoomCamera(0.5);
+            this.zoomCamera(0.1);
         });
 
         document.getElementById('cameraZoomOutBtn').addEventListener('click', () => {
-            this.zoomCamera(-0.5);
+            this.zoomCamera(-0.1);
         });
 
         document.getElementById('cameraZoomResetBtn').addEventListener('click', () => {
@@ -173,90 +176,64 @@ class CameraOverlayApp {
 
     async initializeCamera() {
         try {
-            this.showStatus('Verificando soporte de cámara...', 'info');
-            
-            // Verificar soporte básico
             if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
                 throw new Error('Navigator no soporta getUserMedia');
             }
-
-            // Verificar HTTPS
             if (location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
                 throw new Error('Se requiere HTTPS para acceso a cámara');
             }
 
-            this.showStatus('Solicitando acceso a la cámara...', 'info');
-            
-            // Intentar diferentes configuraciones para móvil
-            const constraints = [
-                // Configuración ideal para móvil - cámara trasera
-                {
-                    video: {
-                        width: { ideal: window.innerWidth },
-                        height: { ideal: window.innerHeight },
-                        facingMode: this.currentCamera
-                    }
-                },
-                // Configuración alternativa - cámara trasera
-                {
-                    video: {
-                        width: { ideal: 1280 },
-                        height: { ideal: 720 },
-                        facingMode: this.currentCamera
-                    }
-                },
-                // Configuración básica - cámara trasera
-                {
-                    video: {
-                        facingMode: this.currentCamera
-                    }
-                },
-                // Fallback a cualquier cámara
-                {
-                    video: true
-                }
-            ];
-
+            const targetDevice = this.availableCameras[this.currentCameraIndex];
             let stream = null;
-            let error = null;
 
-            // Intentar cada configuración
-            for (let i = 0; i < constraints.length; i++) {
+            if (targetDevice && targetDevice.deviceId) {
+                // Caso normal: abrir por deviceId exacto
+                this.showStatus(`Abriendo ${targetDevice.label || `Cámara ${this.currentCameraIndex + 1}`}...`, 'info');
                 try {
-                    this.showStatus(`Intentando configuración ${i + 1}...`, 'info');
-                    stream = await navigator.mediaDevices.getUserMedia(constraints[i]);
-                    this.showStatus('¡Stream obtenido!', 'success');
-                    break;
+                    stream = await navigator.mediaDevices.getUserMedia({
+                        video: { deviceId: { exact: targetDevice.deviceId } }
+                    });
                 } catch (e) {
-                    error = e;
-                    console.log(`Configuración ${i + 1} falló:`, e.name, e.message);
-                    continue;
+                    console.warn('No se pudo abrir por deviceId, intentando sin exact:', e.message);
+                    try {
+                        stream = await navigator.mediaDevices.getUserMedia({
+                            video: { deviceId: targetDevice.deviceId }
+                        });
+                    } catch (e2) {
+                        console.warn('Segundo intento fallido:', e2.message);
+                    }
                 }
             }
 
-            if (stream) {
-                this.cameraStream = stream;
-                this.video.srcObject = this.cameraStream;
-                
-                this.video.onloadedmetadata = () => {
-                    this.resizeCanvas();
-                    this.updateCameraIndicator();
-                    this.showStatus('Cámara iniciada correctamente', 'success');
-                };
-
-                // Verificar que el video realmente está reproduciendo
-                this.video.onplay = () => {
-                    this.showStatus('Video reproduciéndose', 'success');
-                };
-
-                this.video.onerror = (e) => {
-                    console.error('Error en video:', e);
-                    this.showStatus('Error al reproducir video', 'error');
-                };
-
-            } else {
-                throw error || new Error('No se pudo obtener stream de cámara');
+            // Fallback final: pedir cualquier cámara trasera o la que sea
+            if (!stream) {
+                this.showStatus('Fallback: buscando cualquier cámara trasera...', 'info');
+                const fallbacks = [
+                    { video: { facingMode: { ideal: 'environment' } } },
+                    { video: { facingMode: 'environment' } },
+                    { video: true }
+                ];
+                for (const c of fallbacks) {
+                    try { stream = await navigator.mediaDevices.getUserMedia(c); break; }
+                    catch (e) { /* continuar */ }
+                }
             }
+
+            if (!stream) throw new Error('No se pudo obtener stream de ninguna cámara');
+
+            this.cameraStream = stream;
+            this.video.srcObject = stream;
+            this.cameraZoom = 1;
+            this.video.style.transform = '';
+            this.video.style.transformOrigin = '';
+
+            this.video.onloadedmetadata = () => {
+                this.resizeCanvas();
+                this.updateCameraIndicator();
+                this.showStatus('Cámara iniciada correctamente', 'success');
+            };
+            this.video.onerror = () => this.showStatus('Error al reproducir video', 'error');
+
         } catch (error) {
             console.error('Error accessing camera:', error);
             this.handleCameraError(error);
@@ -356,36 +333,97 @@ class CameraOverlayApp {
 
     async enumerateDevices() {
         try {
-            const devices = await navigator.mediaDevices.enumerateDevices();
-            this.availableCameras = devices.filter(device => device.kind === 'videoinput');
-            
-            console.log('Cámaras disponibles:', this.availableCameras.map(cam => ({
-                id: cam.deviceId,
-                label: cam.label || `Cámara ${this.availableCameras.indexOf(cam) + 1}`
-            })));
+            // Paso 1: pedir permiso para que los labels no aparezcan vacíos
+            let permStream = null;
+            try {
+                permStream = await navigator.mediaDevices.getUserMedia({ video: true });
+            } catch (e) { /* sin permiso, continuamos */ }
+            if (permStream) permStream.getTracks().forEach(t => t.stop());
 
-            // Si no hay cámara trasera, cambiar a frontal
-            if (this.availableCameras.length === 1) {
-                this.currentCamera = 'user';
-                this.showStatus('Solo cámara frontal disponible', 'info');
-            } else {
-                this.showStatus(`${this.availableCameras.length} cámaras encontradas`, 'success');
+            const devices = await navigator.mediaDevices.enumerateDevices();
+            const videoDevices = devices.filter(d => d.kind === 'videoinput');
+
+            // Paso 2: probar cada cámara para obtener facingMode real y capacidades de zoom
+            const probed = [];
+            for (const device of videoDevices) {
+                let facing = 'unknown';
+                let zoomCaps = null;
+                let fovScore = Infinity; // campo visual estimado: menor = más gran angular
+                try {
+                    const s = await navigator.mediaDevices.getUserMedia({
+                        video: { deviceId: { exact: device.deviceId } }
+                    });
+                    const track = s.getVideoTracks()[0];
+                    if (track) {
+                        const settings = track.getSettings();
+                        facing = settings.facingMode || 'unknown';
+                        // Usar zoom mínimo como proxy del campo visual:
+                        // zoom.min más bajo → lente más gran angular
+                        if (track.getCapabilities) {
+                            const caps = track.getCapabilities();
+                            if (caps.zoom) {
+                                zoomCaps = caps.zoom;
+                                fovScore = caps.zoom.min;
+                            }
+                        }
+                    }
+                    s.getTracks().forEach(t => t.stop());
+                } catch (e) {
+                    console.warn(`No se pudo probar "${device.label || device.deviceId}":`, e.message);
+                }
+                probed.push({ device, facing, zoomCaps, fovScore });
+                console.log(
+                    `Cámara: "${device.label || device.deviceId}"`,
+                    `facing=${facing}`,
+                    zoomCaps ? `zoom=${zoomCaps.min}–${zoomCaps.max}` : 'zoom=no'
+                );
             }
+
+            // Paso 3: separar traseras y frontales, ordenar cada grupo de gran angular a teleobjetivo
+            const rear  = probed.filter(p => p.facing === 'environment')
+                                .sort((a, b) => a.fovScore - b.fovScore); // gran angular primero
+            const front = probed.filter(p => p.facing === 'user')
+                                .sort((a, b) => a.fovScore - b.fovScore);
+            const other = probed.filter(p => p.facing === 'unknown');
+
+            // Orden final: traseras (gran angular → tele) → desconocidas → frontales
+            const ordered = [...rear, ...other, ...front];
+            this.availableCameras = ordered.map(p => p.device);
+            this.cameraFacingMap  = new Map(ordered.map(p => [p.device.deviceId, p.facing]));
+            this.cameraZoomCapsMap = new Map(ordered.map(p => [p.device.deviceId, p.zoomCaps]));
+
+            // Paso 4: seleccionar por defecto la primera cámara trasera
+            const firstRearIdx = ordered.findIndex(p => p.facing === 'environment');
+            this.currentCameraIndex = firstRearIdx >= 0 ? firstRearIdx : 0;
+            this.currentCamera = firstRearIdx >= 0 ? 'environment' : 'user';
+
+            this.showStatus(`${this.availableCameras.length} cámara(s) detectada(s)`, 'success');
+            console.log('Orden final:', ordered.map((p, i) => {
+                const caps = p.zoomCaps;
+                return `[${i}${i === this.currentCameraIndex ? '*' : ''}] "${p.device.label || p.device.deviceId}" ` +
+                       `facing=${p.facing} ` +
+                       (caps ? `zoom=${caps.min}–${caps.max}` : 'zoom=no');
+            }));
         } catch (error) {
             console.error('Error enumerando dispositivos:', error);
         }
     }
 
     async switchCamera() {
-        // Cambiar entre cámara frontal y trasera
-        this.currentCamera = this.currentCamera === 'user' ? 'environment' : 'user';
-        
-        this.showStatus(`Cambiando a cámara ${this.currentCamera === 'user' ? 'frontal' : 'trasera'}...`, 'info');
-        
-        // Detener stream actual con limpieza adecuada
+        if (this.availableCameras.length === 0) {
+            this.showStatus('No hay cámaras disponibles', 'error');
+            return;
+        }
+
+        this.currentCameraIndex = (this.currentCameraIndex + 1) % this.availableCameras.length;
+        const cam = this.availableCameras[this.currentCameraIndex];
+        const label = cam.label || `Cámara ${this.currentCameraIndex + 1}`;
+        const facing = (this.cameraFacingMap && this.cameraFacingMap.get(cam.deviceId)) || 'unknown';
+        this.currentCamera = facing === 'user' ? 'user' : 'environment';
+
+        this.showStatus(`Cambiando a: ${label} (${this.currentCameraIndex + 1}/${this.availableCameras.length})`, 'info');
+
         await this.cleanupCameraStream();
-        
-        // Reintentar con nueva cámara
         await this.initializeCamera();
     }
 
@@ -413,8 +451,19 @@ class CameraOverlayApp {
     }
 
     updateCameraIndicator() {
-        const isFront = this.currentCamera === 'user';
-        this.cameraType.textContent = isFront ? '🤱 Frontal' : '📷 Trasera';
+        const total = this.availableCameras.length;
+        const idx = this.currentCameraIndex + 1;
+        const cam = this.availableCameras[this.currentCameraIndex];
+        const facing = (cam && this.cameraFacingMap && this.cameraFacingMap.get(cam.deviceId)) || this.currentCamera;
+        const isFront = facing === 'user';
+        const label = cam ? (cam.label || `Cámara ${idx}`) : (isFront ? 'Frontal' : 'Trasera');
+        const shortLabel = label.length > 22 ? label.substring(0, 20) + '…' : label;
+
+        // Mostrar rango de zoom si está disponible
+        const zoomCaps = cam && this.cameraZoomCapsMap && this.cameraZoomCapsMap.get(cam.deviceId);
+        const zoomInfo = zoomCaps ? ` · zoom ${zoomCaps.min}–${zoomCaps.max}` : '';
+
+        this.cameraType.textContent = `${isFront ? '🤳' : '📷'} ${shortLabel} (${idx}/${total})${zoomInfo}`;
         this.cameraType.className = `badge ${isFront ? 'bg-danger' : 'bg-primary'}`;
     }
 
@@ -423,92 +472,117 @@ class CameraOverlayApp {
        ============================================= */
 
     zoomCamera(factor) {
-        this.cameraZoom = Math.max(this.minZoom, Math.min(this.maxZoom, this.cameraZoom + factor));
+        // Redondear a 1 decimal para evitar acumulación de errores de punto flotante
+        this.cameraZoom = Math.round(
+            Math.max(this.minZoom, Math.min(this.maxZoom, this.cameraZoom + factor)) * 10
+        ) / 10;
         this.applyCameraZoom();
-        this.showStatus(`Zoom cámara: ${Math.round(this.cameraZoom * 100)}%`, 'info');
     }
 
     resetCameraZoom() {
         this.cameraZoom = 1;
+        this.clearZoomOutStyle();
         this.applyCameraZoom();
-        this.showStatus('Zoom cámara reseteado', 'info');
+        this.showStatus('Zoom reseteado a 1x', 'info');
     }
 
     async applyCameraZoom() {
         if (!this.cameraStream) return;
 
-        try {
-            // Obtener el track de video
-            const videoTrack = this.cameraStream.getVideoTracks()[0];
-            if (!videoTrack) {
-                console.warn('No video track found for zoom');
-                this.applyDigitalZoom();
-                return;
-            }
+        // Zoom out (<1x): siempre digital por reducción del cuadro, independiente del hardware
+        if (this.cameraZoom < 1) {
+            this.applyZoomOut();
+            this.showStatus(`Zoom: ${this.cameraZoom.toFixed(1)}x`, 'info');
+            return;
+        }
 
-            // Verificar si el track soporta zoom
-            const capabilities = videoTrack.getCapabilities();
-            const settings = videoTrack.getSettings();
-            
+        // Zoom in (>=1x): intentar nativo, fallback a digital
+        try {
+            const videoTrack = this.cameraStream.getVideoTracks()[0];
+            if (!videoTrack) { this.applyDigitalZoom(); return; }
+
+            const capabilities = videoTrack.getCapabilities ? videoTrack.getCapabilities() : {};
+
             if (capabilities && capabilities.zoom) {
-                // Aplicar zoom nativo si está disponible
-                const currentConstraints = {
-                    width: settings.width,
-                    height: settings.height,
-                    facingMode: this.currentCamera
-                };
-                
-                // Agregar zoom a las restricciones
-                const constraints = {
-                    video: {
-                        ...currentConstraints,
-                        zoom: this.cameraZoom
-                    }
-                };
-                
+                const hwMin = capabilities.zoom.min;
+                const hwMax = capabilities.zoom.max;
+                const zoomValue = Math.max(hwMin, Math.min(hwMax, hwMin * this.cameraZoom));
                 try {
-                    // Aplicar nuevas restricciones
-                    const newStream = await navigator.mediaDevices.getUserMedia(constraints);
-                    
-                    // Limpiar stream anterior
-                    await this.cleanupCameraStream();
-                    
-                    // Reemplazar con nuevo stream
-                    this.cameraStream = newStream;
-                    this.video.srcObject = newStream;
-                    
-                    this.showStatus(`Zoom cámara: ${Math.round(this.cameraZoom * 100)}% (nativo)`, 'info');
-                } catch (constraintError) {
-                    console.warn('Error applying zoom constraints:', constraintError);
+                    await videoTrack.applyConstraints({ advanced: [{ zoom: zoomValue }] });
+                    // Limpiar zoom out por si venía de <1x
+                    this.clearZoomOutStyle();
+                    this.showStatus(`Zoom: ${this.cameraZoom.toFixed(1)}x (nativo)`, 'info');
+                } catch (e) {
                     this.applyDigitalZoom();
-                    this.showStatus(`Zoom cámara: ${Math.round(this.cameraZoom * 100)}% (digital)`, 'info');
+                    this.showStatus(`Zoom: ${this.cameraZoom.toFixed(1)}x (digital)`, 'info');
                 }
             } else {
-                // Fallback: zoom digital (simulado)
                 this.applyDigitalZoom();
-                this.showStatus(`Zoom cámara: ${Math.round(this.cameraZoom * 100)}% (digital)`, 'info');
+                this.showStatus(`Zoom: ${this.cameraZoom.toFixed(1)}x (digital)`, 'info');
             }
         } catch (error) {
-            console.log('Error aplicando zoom:', error);
             this.applyDigitalZoom();
-            this.showStatus(`Zoom cámara: ${Math.round(this.cameraZoom * 100)}% (digital)`, 'info');
+            this.showStatus(`Zoom: ${this.cameraZoom.toFixed(1)}x (digital)`, 'info');
         }
     }
 
+    // Zoom in digital (>=1x): escala el video hacia afuera, el contenedor recorta el desborde
     applyDigitalZoom() {
-        // Zoom digital simulado con transform CSS
-        const scaleFactor = this.cameraZoom;
-        
-        // Aplica transformación CSS para simular zoom óptico
-        this.video.style.transform = `scale(${scaleFactor})`;
+        this.clearZoomOutStyle();
+        this.video.style.transform = `scale(${this.cameraZoom})`;
         this.video.style.transformOrigin = 'center center';
+        this.video.style.width = '100%';
+        this.video.style.height = '100%';
         this.video.style.objectFit = 'cover';
-        
-        // Ajusta el contenedor si es necesario
+        this.video.style.position = 'absolute';
+        this.video.style.top = '0';
+        this.video.style.left = '0';
         const container = this.video.parentElement;
         if (container) {
             container.style.overflow = 'hidden';
+            container.style.position = 'relative';
         }
+    }
+
+    // Zoom out digital (<1x): reduce el video dentro del contenedor dejando bandas negras
+    applyZoomOut() {
+        const scale = Math.max(0.1, this.cameraZoom); // nunca menos de 10%
+        // Quitar zoom nativo si había
+        try {
+            const videoTrack = this.cameraStream && this.cameraStream.getVideoTracks()[0];
+            if (videoTrack) {
+                const caps = videoTrack.getCapabilities ? videoTrack.getCapabilities() : {};
+                if (caps.zoom) {
+                    videoTrack.applyConstraints({ advanced: [{ zoom: caps.zoom.min }] }).catch(() => {});
+                }
+            }
+        } catch (e) { /* ignorar */ }
+
+        // Reducir el video dentro del contenedor — el contenedor mantiene su tamaño
+        this.video.style.transform = `scale(${scale})`;
+        this.video.style.transformOrigin = 'center center';
+        this.video.style.width = '100%';
+        this.video.style.height = '100%';
+        this.video.style.objectFit = 'cover';
+        this.video.style.position = 'absolute';
+        this.video.style.top = '0';
+        this.video.style.left = '0';
+
+        const container = this.video.parentElement;
+        if (container) {
+            // Fondo negro para las bandas que quedan al reducir
+            container.style.backgroundColor = '#000';
+            container.style.overflow = 'hidden';
+            container.style.position = 'relative';
+        }
+    }
+
+    // Limpia los estilos aplicados por applyZoomOut sin tocar los de zoom in
+    clearZoomOutStyle() {
+        this.video.style.transform = '';
+        this.video.style.transformOrigin = '';
+        const container = this.video.parentElement;
+        if (container) container.style.backgroundColor = '';
     }
 
     displayCameraError(message, solutions, error, technicalInfo) {
