@@ -30,6 +30,7 @@ class CameraOverlayApp {
         this.availableCameras = [];
         this.cameraZoom = 1; // Zoom de la cámara
         this.maxZoom = 10; // Zoom máximo permitido
+        this.minZoom = 0.1; // Zoom mínimo permitido (10x alejado)
         
         // Inicialización
         this.initializeControls();
@@ -414,7 +415,7 @@ class CameraOverlayApp {
        ============================================= */
 
     zoomCamera(factor) {
-        this.cameraZoom = Math.max(1, Math.min(this.maxZoom, this.cameraZoom + factor));
+        this.cameraZoom = Math.max(this.minZoom, Math.min(this.maxZoom, this.cameraZoom + factor));
         this.applyCameraZoom();
         this.showStatus(`Zoom cámara: ${Math.round(this.cameraZoom * 100)}%`, 'info');
     }

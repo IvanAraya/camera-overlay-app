@@ -9,7 +9,7 @@ Aplicación web progresiva (PWA) para superponer imágenes sobre la cámara en t
 - ✅ Cambio entre frontal/trasera
 - ✅ Detección automática de cámaras
 - ✅ Indicador visual de cámara activa
-- ✅ **Control de zoom digital (1x - 10x)**
+- ✅ **Control de zoom digital (0.1x - 10x)**
 - ✅ **Zoom con botones táctiles**
 - ✅ **Zoom con gestos (pellizco sin imagen)**
 - ✅ **Zoom con rueda + Ctrl/Cmd**
