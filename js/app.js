@@ -587,54 +587,8 @@ Error completo: ${JSON.stringify(error, null, 2)}</pre>
             return;
         }
 
-        // Validar contenido real del archivo
-        this.validateImageContent(file)
-            .then(isValid => {
-                if (!isValid) {
-                    this.showStatus('El archivo no es una imagen válida', 'error');
-                    this.clearFileInput();
-                    return;
-                }
-                
-                // Si pasa todas las validaciones, procesar la imagen
-                this.processImageFile(file);
-            })
-            .catch(error => {
-                console.error('Error validating image:', error);
-                this.showStatus('Error al validar la imagen', 'error');
-                this.clearFileInput();
-            });
-    }
-
-    validateImageContent(file) {
-        return new Promise((resolve) => {
-            const img = new Image();
-            const objectURL = URL.createObjectURL(file);
-            
-            img.onload = () => {
-                URL.revokeObjectURL(objectURL);
-                
-                // Validar dimensiones mínimas y máximas
-                if (img.width < 10 || img.height < 10) {
-                    resolve(false);
-                    return;
-                }
-                
-                if (img.width > 8192 || img.height > 8192) {
-                    resolve(false);
-                    return;
-                }
-                
-                resolve(true);
-            };
-            
-            img.onerror = () => {
-                URL.revokeObjectURL(objectURL);
-                resolve(false);
-            };
-            
-            img.src = objectURL;
-        });
+        // Procesar directamente sin validación estricta
+        this.processImageFile(file);
     }
 
     processImageFile(file) {
