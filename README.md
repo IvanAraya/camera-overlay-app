@@ -89,7 +89,26 @@ camera-overlay-app/
 
 ## 🔧 **Desarrollo Local**
 
-### **Con HTTPS**
+### **Servidor de Desarrollo (Recomendado)**
+```bash
+cd server
+python dev-server.py
+# O ejecuta start-dev.bat (Windows) o start-dev.sh (Linux/Mac)
+```
+
+**Acceso:**
+- Local: `https://localhost:8443/`
+- Móvil: `https://[tu-ip]:8443/`
+
+### **Características del Servidor**
+- ✅ HTTPS con certificado SSL
+- ✅ Sirve carpeta raíz automáticamente
+- ✅ CORS habilitado
+- ✅ No cache para desarrollo
+- ✅ Logs detallados
+- ✅ Acceso móvil en red local
+
+### **Con HTTPS Manual**
 ```bash
 # Usar servidor HTTPS existente
 python -m http.server 8443 --bind localhost

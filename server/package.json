@@ -1,0 +1,24 @@
+{
+  "name": "camera-overlay-dev-server",
+  "version": "1.0.0",
+  "description": "Servidor de desarrollo HTTPS para Camera Overlay App",
+  "scripts": {
+    "start": "python dev-server.py",
+    "dev": "python dev-server.py",
+    "generate-certs": "openssl req -x509 -newkey rsa:2048 -keyout key.pem -out cert.pem -days 365 -nodes -subj '/CN=localhost'",
+    "install-global": "npm install -g http-server",
+    "serve-simple": "http-server .. -S -C cert.pem -K key.pem -p 8443 -o"
+  },
+  "devDependencies": {
+    "http-server": "^14.1.1"
+  },
+  "keywords": [
+    "development",
+    "https",
+    "server",
+    "camera",
+    "pwa"
+  ],
+  "author": "Camera Overlay Developer",
+  "license": "MIT"
+}
