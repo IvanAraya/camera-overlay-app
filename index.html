@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Superposición de Imagen sobre Cámara</title>
+    
+    <!-- PWA Meta Tags -->
+    <meta name="theme-color" content="#667eea">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Camera Overlay">
+    <meta name="application-name" content="Camera Overlay">
+    <meta name="msapplication-TileColor" content="#000000">
+    <meta name="msapplication-TileImage" content="assets/icon-144.png">
+    
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="manifest.json">
+    
+    <!-- PWA Icons -->
+    <link rel="apple-touch-icon" sizes="72x72" href="assets/icon-72.png">
+    <link rel="apple-touch-icon" sizes="96x96" href="assets/icon-96.png">
+    <link rel="apple-touch-icon" sizes="128x128" href="assets/icon-128.png">
+    <link rel="apple-touch-icon" sizes="144x144" href="assets/icon-144.png">
+    <link rel="apple-touch-icon" sizes="192x192" href="assets/icon-192.png">
+    <link rel="icon" sizes="192x192" href="assets/icon-192.png">
+    <link rel="icon" sizes="512x512" href="assets/icon-512.png">
+    
+    <!-- Styles -->
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+    <div class="camera-container">
+        <video id="cameraVideo" autoplay playsinline></video>
+        <canvas id="overlayCanvas"></canvas>
+        
+        <div class="gesture-hint" id="gestureHint">
+            👆 Arrastra con el dedo para mover | 🔚 Pellizca para resize | 🔄 Botón para cambiar cámara
+        </div>
+        
+        <div class="camera-indicator" id="cameraIndicator">
+            <span id="cameraType">📷 Trasera</span>
+        </div>
+        
+        <div class="zoom-controls">
+            <button class="zoom-btn" id="zoomInBtn">+</button>
+            <button class="zoom-btn" id="zoomOutBtn">−</button>
+        </div>
+    </div>
+
+    <div class="controls-panel" id="controlsPanel">
+        <div class="control-handle"></div>
+        
+        <div class="control-group">
+            <div class="file-input-wrapper">
+                <input type="file" id="imageUpload" accept="image/*">
+                <label for="imageUpload" class="file-input-label">📷</label>
+            </div>
+            <label>Imagen</label>
+        </div>
+
+        <div class="control-group">
+            <input type="range" id="opacitySlider" min="0" max="100" value="100">
+            <span class="value-display" id="opacityValue">100%</span>
+            <label>Opacidad</label>
+        </div>
+
+        <div class="control-group">
+            <input type="range" id="sizeSlider" min="25" max="200" value="100">
+            <span class="value-display" id="sizeValue">100%</span>
+            <label>Tamaño</label>
+        </div>
+
+        <div class="control-group">
+            <input type="range" id="rotationSlider" min="0" max="360" value="0">
+            <span class="value-display" id="rotationValue">0°</span>
+            <label>Rotación</label>
+        </div>
+
+        <div class="action-buttons">
+            <button class="btn-icon btn-secondary" id="resetPositionBtn" title="Resetear posición">🎯</button>
+            <button class="btn-icon btn-secondary" id="switchCameraBtn" title="Cambiar cámara">🔄</button>
+            <button class="btn-icon btn-secondary" id="retryCameraBtn" title="Reintentar cámara">📷</button>
+            <button class="btn-icon btn-danger" id="clearImageBtn" title="Limpiar imagen">🗑️</button>
+        </div>
+    </div>
+
+    <div id="statusMessage"></div>
+
+    <!-- JavaScript -->
+    <script src="js/app.js"></script>
+</body>
+</html>
