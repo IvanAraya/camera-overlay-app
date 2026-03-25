@@ -436,29 +436,60 @@ class CameraOverlayApp {
 
             // Verificar si el track soporta zoom
             const capabilities = videoTrack.getCapabilities();
+            const settings = videoTrack.getSettings();
+            
             if (capabilities.zoom) {
-                // Aplicar zoom si está disponible
-                const constraints = {
-                    advanced: [{
-                        zoom: this.cameraZoom
-                    }]
+                // Aplicar zoom nativo si está disponible
+                const currentConstraints = {
+                    width: settings.width,
+                    height: settings.height,
+                    facingMode: this.currentCamera
                 };
-                await videoTrack.applyConstraints(constraints);
+                
+                // Agregar zoom a las restricciones
+                const constraints = {
+                    video: {
+                        ...currentConstraints,
+                        zoom: this.cameraZoom
+                    }
+                };
+                
+                // Aplicar nuevas restricciones
+                await navigator.mediaDevices.getUserMedia(constraints).then(newStream => {
+                    // Reemplazar el stream actual
+                    this.cameraStream.getTracks().forEach(track => track.stop());
+                    this.cameraStream = newStream;
+                    this.video.srcObject = newStream;
+                    
+                    this.showStatus(`Zoom cámara: ${Math.round(this.cameraZoom * 100)}% (nativo)`, 'info');
+                });
             } else {
                 // Fallback: zoom digital (simulado)
                 this.applyDigitalZoom();
+                this.showStatus(`Zoom cámara: ${Math.round(this.cameraZoom * 100)}% (digital)`, 'info');
             }
         } catch (error) {
             console.log('Error aplicando zoom:', error);
             this.applyDigitalZoom();
+            this.showStatus(`Zoom cámara: ${Math.round(this.cameraZoom * 100)}% (digital)`, 'info');
         }
     }
 
     applyDigitalZoom() {
         // Zoom digital simulado con transform CSS
-        const zoomLevel = this.cameraZoom;
-        this.video.style.transform = `scale(${zoomLevel})`;
+        // Calcula el factor de escala inverso para zoom real
+        const scaleFactor = this.cameraZoom;
+        
+        // Aplica transformación CSS para simular zoom óptico
+        this.video.style.transform = `scale(${scaleFactor})`;
         this.video.style.transformOrigin = 'center center';
+        this.video.style.objectFit = 'cover';
+        
+        // Ajusta el contenedor si es necesario
+        const container = this.video.parentElement;
+        if (container) {
+            container.style.overflow = 'hidden';
+        }
     }
 
     displayCameraError(message, solutions, error, technicalInfo) {
