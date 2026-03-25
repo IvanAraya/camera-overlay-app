@@ -1,10 +1,16 @@
-const CACHE_NAME = 'camera-overlay-v1';
+const CACHE_NAME = 'camera-overlay-v2';
 const urlsToCache = [
   '/',
-  '/camera-overlay.html',
+  '/index.html',
   '/manifest.json',
-  'icon-192.png',
-  'icon-512.png'
+  '/css/styles.css',
+  '/js/app.js',
+  '/assets/icon-72.png',
+  '/assets/icon-96.png',
+  '/assets/icon-128.png',
+  '/assets/icon-144.png',
+  '/assets/icon-192.png',
+  '/assets/icon-512.png'
 ];
 
 // Install event - cache resources
