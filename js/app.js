@@ -34,6 +34,11 @@ class CameraOverlayApp {
         this.minZoom = 0.1; // Zoom mínimo permitido (10x alejado)
         this.settingsOpen = false;
         
+        // Throttling para renderizado
+        this.renderPending = false;
+        this.lastRenderTime = 0;
+        this.renderThrottleDelay = 16; // ~60fps
+        
         // Inicialización
         this.initializeControls();
         this.checkCameraSupport();
@@ -41,6 +46,11 @@ class CameraOverlayApp {
         this.initializeCamera();
         this.initializeTouchGestures();
         this.initializeSettingsPanel();
+        
+        // Agregar cleanup al cerrar página
+        window.addEventListener('beforeunload', () => {
+            this.cleanupCameraStream();
+        });
         
         // Mostrar hint inicialmente
         setTimeout(() => {
@@ -254,77 +264,77 @@ class CameraOverlayApp {
     }
 
     handleCameraError(error) {
-        let message = '';
-        let solutions = [];
-        let technicalInfo = '';
+        const errorMap = {
+            'NotAllowedError': {
+                message: 'Permiso de cámara denegado',
+                solutions: [
+                    'Toca el ícono de 🔒 en la barra de dirección',
+                    'Permite el acceso a la cámara',
+                    'Recarga la página después de permitir',
+                    'Verifica configuración de permisos del navegador'
+                ]
+            },
+            'NotFoundError': {
+                message: 'No se encontró cámara',
+                solutions: [
+                    'Verifica que tu dispositivo tenga cámara',
+                    'Reinicia tu dispositivo',
+                    'Cierra otras apps que usen la cámara',
+                    'Verifica que la cámara no esté desactivada en configuraciones'
+                ]
+            },
+            'NotSupportedError': {
+                message: 'Cámara no compatible',
+                solutions: [
+                    'Actualiza tu navegador',
+                    'Usa Chrome, Safari o Firefox',
+                    'Verifica que tu navegador soporte WebRTC',
+                    'Evita navegadores antiguos o modo incógnito'
+                ]
+            },
+            'NotReadableError': {
+                message: 'Cámara en uso por otra aplicación',
+                solutions: [
+                    'Cierra otras aplicaciones que usen la cámara',
+                    'Reinicia tu dispositivo',
+                    'Espera unos segundos y recarga',
+                    'Verifica que ninguna otra pestaña use la cámara'
+                ]
+            },
+            'OverconstrainedError': {
+                message: 'Requisitos de cámara no cumplidos',
+                solutions: [
+                    'Tu cámara no soporta la resolución requerida',
+                    'Intenta usar otro dispositivo',
+                    'Recarga la página',
+                    'Verifica especificaciones de tu cámara'
+                ]
+            }
+        };
 
-        // Analizar el tipo de error
-        if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
-            message = 'Permiso de cámara denegado';
-            solutions = [
-                'Toca el ícono de 🔒 en la barra de dirección',
-                'Permite el acceso a la cámara',
-                'Recarga la página después de permitir',
-                'Verifica configuración de permisos del navegador'
-            ];
-            technicalInfo = `Error: ${error.name} - El usuario denegó el permiso`;
-        } else if (error.name === 'NotFoundError' || error.name === 'DevicesNotFoundError') {
-            message = 'No se encontró cámara';
-            solutions = [
-                'Verifica que tu dispositivo tenga cámara',
-                'Reinicia tu dispositivo',
-                'Cierra otras apps que usen la cámara',
-                'Verifica que la cámara no esté desactivada en configuraciones'
-            ];
-            technicalInfo = `Error: ${error.name} - No hay dispositivos de cámara disponibles`;
-        } else if (error.name === 'NotSupportedError' || error.name === 'ConstraintNotSatisfiedError') {
-            message = 'Cámara no compatible';
-            solutions = [
-                'Actualiza tu navegador',
-                'Usa Chrome, Safari o Firefox',
-                'Verifica que tu navegador soporte WebRTC',
-                'Evita navegadores antiguos o modo incógnito'
-            ];
-            technicalInfo = `Error: ${error.name} - Navegador no soporta getUserMedia`;
-        } else if (error.name === 'NotReadableError' || error.name === 'TrackStartError') {
-            message = 'Cámara en uso por otra app';
-            solutions = [
-                'Cierra otras aplicaciones que usen la cámara',
-                'Reinicia tu dispositivo',
-                'Espera unos segundos y recarga',
-                'Verifica que ninguna otra pestaña use la cámara'
-            ];
-            technicalInfo = `Error: ${error.name} - Cámara siendo usada por otro proceso`;
-        } else if (error.name === 'OverconstrainedError' || error.name === 'ConstraintNotSatisfiedError') {
-            message = 'Requisitos de cámara no cumplidos';
-            solutions = [
-                'Tu cámara no soporta la resolución requerida',
-                'Intenta usar otro dispositivo',
-                'Recarga la página',
-                'Verifica especificaciones de tu cámara'
-            ];
-            technicalInfo = `Error: ${error.name} - Constraints no pueden ser satisfechas`;
-        } else if (error.message && error.message.includes('HTTPS')) {
-            message = 'Se requiere conexión segura HTTPS';
-            solutions = [
-                'Usa el servidor HTTPS: https://localhost:8443/index-layout.html',
-                'Accede desde https://[TU_IP]:8443/index-layout.html',
-                'Acepta la advertencia de certificado',
-                'No uses http:// o file://'
-            ];
-            technicalInfo = `Error: Se requiere HTTPS para acceso a cámara en móviles`;
-        } else {
-            message = 'Error desconocido al acceder a la cámara';
-            solutions = [
+        const errorInfo = errorMap[error.name] || {
+            message: 'Error desconocido al acceder a la cámara',
+            solutions: [
                 'Recarga la página',
                 'Reinicia tu dispositivo',
                 'Intenta con otro navegador',
                 'Verifica consola para más detalles'
+            ]
+        };
+
+        // Manejo especial para errores HTTPS
+        if (error.message && error.message.includes('HTTPS')) {
+            errorInfo.message = 'Se requiere conexión segura HTTPS';
+            errorInfo.solutions = [
+                'Usa el servidor HTTPS: https://localhost:8443/index.html',
+                'Accede desde https://[TU_IP]:8443/index.html',
+                'Acepta la advertencia de certificado',
+                'No uses http:// o file://'
             ];
-            technicalInfo = `Error: ${error.name || 'Desconocido'} - ${error.message || 'Sin mensaje'}`;
         }
 
-        this.displayCameraError(message, solutions, error, technicalInfo);
+        const technicalInfo = `Error: ${error.name || 'Desconocido'} - ${error.message || 'Sin mensaje'}`;
+        this.displayCameraError(errorInfo.message, errorInfo.solutions, error, technicalInfo);
     }
 
     checkCameraSupport() {
@@ -372,14 +382,34 @@ class CameraOverlayApp {
         
         this.showStatus(`Cambiando a cámara ${this.currentCamera === 'user' ? 'frontal' : 'trasera'}...`, 'info');
         
-        // Detener stream actual
-        if (this.cameraStream) {
-            this.cameraStream.getTracks().forEach(track => track.stop());
-            this.cameraStream = null;
-        }
+        // Detener stream actual con limpieza adecuada
+        await this.cleanupCameraStream();
         
         // Reintentar con nueva cámara
         await this.initializeCamera();
+    }
+
+    async cleanupCameraStream() {
+        if (this.cameraStream) {
+            try {
+                // Detener todos los tracks del stream
+                this.cameraStream.getTracks().forEach(track => {
+                    if (track.readyState === 'live') {
+                        track.stop();
+                    }
+                });
+                
+                // Limpiar referencia del video
+                if (this.video && this.video.srcObject === this.cameraStream) {
+                    this.video.srcObject = null;
+                }
+                
+                this.cameraStream = null;
+                console.log('Camera stream cleaned up successfully');
+            } catch (error) {
+                console.error('Error cleaning up camera stream:', error);
+            }
+        }
     }
 
     updateCameraIndicator() {
@@ -410,13 +440,17 @@ class CameraOverlayApp {
         try {
             // Obtener el track de video
             const videoTrack = this.cameraStream.getVideoTracks()[0];
-            if (!videoTrack) return;
+            if (!videoTrack) {
+                console.warn('No video track found for zoom');
+                this.applyDigitalZoom();
+                return;
+            }
 
             // Verificar si el track soporta zoom
             const capabilities = videoTrack.getCapabilities();
             const settings = videoTrack.getSettings();
             
-            if (capabilities.zoom) {
+            if (capabilities && capabilities.zoom) {
                 // Aplicar zoom nativo si está disponible
                 const currentConstraints = {
                     width: settings.width,
@@ -432,15 +466,23 @@ class CameraOverlayApp {
                     }
                 };
                 
-                // Aplicar nuevas restricciones
-                await navigator.mediaDevices.getUserMedia(constraints).then(newStream => {
-                    // Reemplazar el stream actual
-                    this.cameraStream.getTracks().forEach(track => track.stop());
+                try {
+                    // Aplicar nuevas restricciones
+                    const newStream = await navigator.mediaDevices.getUserMedia(constraints);
+                    
+                    // Limpiar stream anterior
+                    await this.cleanupCameraStream();
+                    
+                    // Reemplazar con nuevo stream
                     this.cameraStream = newStream;
                     this.video.srcObject = newStream;
                     
                     this.showStatus(`Zoom cámara: ${Math.round(this.cameraZoom * 100)}% (nativo)`, 'info');
-                });
+                } catch (constraintError) {
+                    console.warn('Error applying zoom constraints:', constraintError);
+                    this.applyDigitalZoom();
+                    this.showStatus(`Zoom cámara: ${Math.round(this.cameraZoom * 100)}% (digital)`, 'info');
+                }
             } else {
                 // Fallback: zoom digital (simulado)
                 this.applyDigitalZoom();
@@ -522,11 +564,80 @@ Error completo: ${JSON.stringify(error, null, 2)}</pre>
         const file = event.target.files[0];
         if (!file) return;
 
+        // Validación de tipo de archivo
         if (!file.type.startsWith('image/')) {
             this.showStatus('Por favor, selecciona un archivo de imagen válido', 'error');
+            this.clearFileInput();
             return;
         }
 
+        // Validación de tamaño (máximo 10MB)
+        const maxSize = 10 * 1024 * 1024; // 10MB
+        if (file.size > maxSize) {
+            this.showStatus('El archivo es demasiado grande. Máximo 10MB', 'error');
+            this.clearFileInput();
+            return;
+        }
+
+        // Validación de tipos de imagen permitidos
+        const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+        if (!allowedTypes.includes(file.type)) {
+            this.showStatus('Tipo de imagen no soportado. Usa JPEG, PNG, GIF o WebP', 'error');
+            this.clearFileInput();
+            return;
+        }
+
+        // Validar contenido real del archivo
+        this.validateImageContent(file)
+            .then(isValid => {
+                if (!isValid) {
+                    this.showStatus('El archivo no es una imagen válida', 'error');
+                    this.clearFileInput();
+                    return;
+                }
+                
+                // Si pasa todas las validaciones, procesar la imagen
+                this.processImageFile(file);
+            })
+            .catch(error => {
+                console.error('Error validating image:', error);
+                this.showStatus('Error al validar la imagen', 'error');
+                this.clearFileInput();
+            });
+    }
+
+    validateImageContent(file) {
+        return new Promise((resolve) => {
+            const img = new Image();
+            const objectURL = URL.createObjectURL(file);
+            
+            img.onload = () => {
+                URL.revokeObjectURL(objectURL);
+                
+                // Validar dimensiones mínimas y máximas
+                if (img.width < 10 || img.height < 10) {
+                    resolve(false);
+                    return;
+                }
+                
+                if (img.width > 8192 || img.height > 8192) {
+                    resolve(false);
+                    return;
+                }
+                
+                resolve(true);
+            };
+            
+            img.onerror = () => {
+                URL.revokeObjectURL(objectURL);
+                resolve(false);
+            };
+            
+            img.src = objectURL;
+        });
+    }
+
+    processImageFile(file) {
         const reader = new FileReader();
         reader.onload = (e) => {
             const img = new Image();
@@ -544,13 +655,22 @@ Error completo: ${JSON.stringify(error, null, 2)}</pre>
             };
             img.onerror = () => {
                 this.showStatus('Error al cargar la imagen', 'error');
+                this.clearFileInput();
             };
             img.src = e.target.result;
         };
         reader.onerror = () => {
             this.showStatus('Error al leer el archivo', 'error');
+            this.clearFileInput();
         };
         reader.readAsDataURL(file);
+    }
+
+    clearFileInput() {
+        const fileInput = document.getElementById('imageUpload');
+        if (fileInput) {
+            fileInput.value = '';
+        }
     }
 
     /* =============================================
@@ -682,6 +802,25 @@ Error completo: ${JSON.stringify(error, null, 2)}</pre>
     }
 
     renderOverlay() {
+        // Throttle rendering para mejor rendimiento
+        const now = performance.now();
+        if (this.renderPending || (now - this.lastRenderTime) < this.renderThrottleDelay) {
+            if (!this.renderPending) {
+                this.renderPending = true;
+                requestAnimationFrame(() => {
+                    this.performRender();
+                    this.renderPending = false;
+                    this.lastRenderTime = performance.now();
+                });
+            }
+            return;
+        }
+        
+        this.performRender();
+        this.lastRenderTime = now;
+    }
+
+    performRender() {
         if (!this.overlayImage) {
             this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
             return;
@@ -737,8 +876,8 @@ Error completo: ${JSON.stringify(error, null, 2)}</pre>
     }
 
     showStatus(message, type = 'info') {
-        const alertClass = type === 'error' ? 'alert-danger' : 'alert-success';
-        const icon = type === 'error' ? 'bi-exclamation-triangle' : 'bi-check-circle';
+        const alertClass = type === 'error' ? 'alert-danger' : type === 'success' ? 'alert-success' : 'alert-info';
+        const icon = type === 'error' ? 'bi-exclamation-triangle-fill' : type === 'success' ? 'bi-check-circle-fill' : 'bi-info-circle-fill';
         
         this.statusMessage.innerHTML = `
             <div class="alert ${alertClass} d-flex align-items-center" style="position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 2000; min-width: 300px;" role="alert">
@@ -747,6 +886,7 @@ Error completo: ${JSON.stringify(error, null, 2)}</pre>
             </div>
         `;
         
+        // Auto-ocultar para mensajes que no sean de error
         if (type !== 'error') {
             setTimeout(() => {
                 if (this.statusMessage.innerHTML.includes(message)) {
