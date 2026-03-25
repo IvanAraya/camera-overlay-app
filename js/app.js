@@ -28,6 +28,8 @@ class CameraOverlayApp {
         this.initialPinchScale = 1;
         this.currentCamera = 'environment'; // 'user' para frontal, 'environment' para trasera
         this.availableCameras = [];
+        this.cameraZoom = 1; // Zoom de la cámara
+        this.maxZoom = 10; // Zoom máximo permitido
         
         // Inicialización
         this.initializeControls();
@@ -91,6 +93,19 @@ class CameraOverlayApp {
             this.scale = Math.max(this.scale - 0.1, 0.25);
             this.updateSizeSlider();
             this.renderOverlay();
+        });
+
+        // Camera zoom buttons
+        document.getElementById('cameraZoomInBtn').addEventListener('click', () => {
+            this.zoomCamera(0.5);
+        });
+
+        document.getElementById('cameraZoomOutBtn').addEventListener('click', () => {
+            this.zoomCamera(-0.5);
+        });
+
+        document.getElementById('cameraZoomResetBtn').addEventListener('click', () => {
+            this.resetCameraZoom();
         });
 
         // Action buttons
@@ -394,6 +409,57 @@ class CameraOverlayApp {
         this.cameraType.style.color = isFront ? '#ff6b9d' : '#4ecdc4';
     }
 
+    /* =============================================
+       CONTROL DE ZOOM DE CÁMARA
+       ============================================= */
+
+    zoomCamera(factor) {
+        this.cameraZoom = Math.max(1, Math.min(this.maxZoom, this.cameraZoom + factor));
+        this.applyCameraZoom();
+        this.showStatus(`Zoom cámara: ${Math.round(this.cameraZoom * 100)}%`, 'info');
+    }
+
+    resetCameraZoom() {
+        this.cameraZoom = 1;
+        this.applyCameraZoom();
+        this.showStatus('Zoom cámara reseteado', 'info');
+    }
+
+    async applyCameraZoom() {
+        if (!this.cameraStream) return;
+
+        try {
+            // Obtener el track de video
+            const videoTrack = this.cameraStream.getVideoTracks()[0];
+            if (!videoTrack) return;
+
+            // Verificar si el track soporta zoom
+            const capabilities = videoTrack.getCapabilities();
+            if (capabilities.zoom) {
+                // Aplicar zoom si está disponible
+                const constraints = {
+                    advanced: [{
+                        zoom: this.cameraZoom
+                    }]
+                };
+                await videoTrack.applyConstraints(constraints);
+            } else {
+                // Fallback: zoom digital (simulado)
+                this.applyDigitalZoom();
+            }
+        } catch (error) {
+            console.log('Error aplicando zoom:', error);
+            this.applyDigitalZoom();
+        }
+    }
+
+    applyDigitalZoom() {
+        // Zoom digital simulado con transform CSS
+        const zoomLevel = this.cameraZoom;
+        this.video.style.transform = `scale(${zoomLevel})`;
+        this.video.style.transformOrigin = 'center center';
+    }
+
     displayCameraError(message, solutions, error, technicalInfo) {
         const solutionsHtml = solutions.map(solution => `<li>• ${solution}</li>`).join('');
         
@@ -518,42 +584,52 @@ Error completo: ${JSON.stringify(error, null, 2)}
         // Touch events para móvil
         this.canvas.addEventListener('touchstart', (e) => {
             e.preventDefault();
-            if (!this.overlayImage) return;
-
+            
             if (e.touches.length === 1) {
-                // Un dedo - arrastrar
-                this.isDragging = true;
-                const rect = this.canvas.getBoundingClientRect();
-                const touch = e.touches[0];
-                this.dragStart.x = touch.clientX - rect.left - this.position.x;
-                this.dragStart.y = touch.clientY - rect.top - this.position.y;
+                // Un dedo - arrastrar imagen
+                if (this.overlayImage) {
+                    this.isDragging = true;
+                    const rect = this.canvas.getBoundingClientRect();
+                    const touch = e.touches[0];
+                    this.dragStart.x = touch.clientX - rect.left - this.position.x;
+                    this.dragStart.y = touch.clientY - rect.top - this.position.y;
+                }
             } else if (e.touches.length === 2) {
-                // Dos dedos - pellizco
+                // Dos dedos - pellizco para resize de imagen O zoom de cámara
                 this.isPinching = true;
                 this.isDragging = false;
                 this.lastTouchDistance = this.getTouchDistance(e.touches);
                 this.initialPinchScale = this.scale;
+                this.initialCameraZoom = this.cameraZoom;
             }
         });
 
         this.canvas.addEventListener('touchmove', (e) => {
             e.preventDefault();
-            if (!this.overlayImage) return;
-
+            
             if (e.touches.length === 1 && this.isDragging) {
-                // Arrastrar con un dedo
+                // Arrastrar con un dedo - imagen
                 const rect = this.canvas.getBoundingClientRect();
                 const touch = e.touches[0];
                 this.position.x = touch.clientX - rect.left - this.dragStart.x;
                 this.position.y = touch.clientY - rect.top - this.dragStart.y;
                 this.renderOverlay();
             } else if (e.touches.length === 2 && this.isPinching) {
-                // Pellizco para resize
+                // Dos dedos - detectar dirección del pellizco
                 const currentDistance = this.getTouchDistance(e.touches);
                 const scaleRatio = currentDistance / this.lastTouchDistance;
-                this.scale = Math.max(0.25, Math.min(2, this.initialPinchScale * scaleRatio));
-                this.updateSizeSlider();
-                this.renderOverlay();
+                
+                // Si hay imagen superpuesta, hacer zoom a la imagen
+                if (this.overlayImage) {
+                    this.scale = Math.max(0.25, Math.min(2, this.initialPinchScale * scaleRatio));
+                    this.updateSizeSlider();
+                    this.renderOverlay();
+                } else {
+                    // Si no hay imagen, hacer zoom a la cámara
+                    this.cameraZoom = Math.max(1, Math.min(this.maxZoom, this.initialCameraZoom * scaleRatio));
+                    this.applyCameraZoom();
+                    this.showStatus(`Zoom cámara: ${Math.round(this.cameraZoom * 100)}%`, 'info');
+                }
             }
         });
 
@@ -567,12 +643,18 @@ Error completo: ${JSON.stringify(error, null, 2)}
         // Wheel event para zoom con mouse wheel
         this.canvas.addEventListener('wheel', (e) => {
             e.preventDefault();
-            if (!this.overlayImage) return;
             
-            const delta = e.deltaY > 0 ? -0.1 : 0.1;
-            this.scale = Math.max(0.25, Math.min(2, this.scale + delta));
-            this.updateSizeSlider();
-            this.renderOverlay();
+            if (e.ctrlKey || e.metaKey) {
+                // Ctrl/Cmd + wheel = zoom de cámara
+                const delta = e.deltaY > 0 ? -0.1 : 0.1;
+                this.zoomCamera(delta);
+            } else if (this.overlayImage) {
+                // Wheel normal = zoom de imagen
+                const delta = e.deltaY > 0 ? -0.1 : 0.1;
+                this.scale = Math.max(0.25, Math.min(2, this.scale + delta));
+                this.updateSizeSlider();
+                this.renderOverlay();
+            }
         });
     }
 
